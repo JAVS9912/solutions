@@ -24,164 +24,149 @@
   </style>
 </head>
 <body class="p-6">
-
-<div class="max-w-7xl mx-auto">
-
-  <!-- Header -->
-  <header class="mb-6 text-white">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-bold">Control de Taller</h1>
-        <p class="text-sm text-white/70">Monitoreo de mesas</p>
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <header class="mb-6 text-white">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold">Control de Taller</h1>
+          <p class="text-sm text-white/70">Monitoreo de mesas</p>
+        </div>
+        <div class="text-right">
+          <div id="current-time" class="text-sm text-white/80"></div>
+          <div class="mt-1 text-xs text-white/60">Estado: <span id="conn-status" class="text-green-300">Conectado</span></div>
+        </div>
       </div>
-      <div class="text-right">
-        <div id="current-time" class="text-sm text-white/80"></div>
-        <div class="mt-1 text-xs text-white/60">Estado: <span id="conn-status" class="text-green-300">Conectado</span></div>
+    </header>
+
+    <!-- Controls -->
+    <div class="bg-white/5 p-4 rounded-lg mb-6 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+      <div class="flex items-center gap-3">
+        <input id="search" type="text" placeholder="Buscar mesa, operador o proyecto..." class="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/60 focus:outline-none w-72">
+        <select id="filter-type" class="px-3 py-2 rounded-lg bg-white/10 text-white">
+          <option value="">Mostrar todo</option>
+          <option value="trabajo">Mesas de trabajo</option>
+          <option value="corte">Mesa de corte</option>
+          <option value="torno">Torno/Taladro</option>
+        </select>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button id="downloadExcelBtn" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow">
+          <i class="fa-solid fa-file-excel mr-2"></i> Descargar Excel (día)
+        </button>
+        <button id="clearLogBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow" title="Limpiar registros del día (no reversible)">
+          <i class="fa-solid fa-trash"></i>
+        </button>
       </div>
     </div>
-  </header>
 
-  <!-- Controls -->
-  <div class="bg-white/5 p-4 rounded-lg mb-6 flex flex-col md:flex-row md:items-center gap-3 justify-between">
-    <div class="flex items-center gap-3">
-      <input id="search" type="text" placeholder="Buscar mesa, operador o proyecto..." class="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/60 focus:outline-none w-72">
-      <select id="filter-type" class="px-3 py-2 rounded-lg bg-white/10 text-white">
-        <option value="">Mostrar todo</option>
-        <option value="trabajo">Mesas de trabajo</option>
-        <option value="corte">Mesa de corte</option>
-        <option value="torno">Torno/Taladro</option>
-      </select>
-    </div>
+    <!-- Mesas Grid -->
+    <section id="mesasGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"></section>
 
-    <div class="flex items-center gap-3">
-      <button id="downloadExcelBtn" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow">
-        <i class="fa-solid fa-file-excel mr-2"></i> Descargar Excel (día)
-      </button>
-      <button id="clearLogBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow" title="Limpiar registros del día (no reversible)">
-        <i class="fa-solid fa-trash"></i>
-      </button>
+    <!-- Registro Diario (Tabla) -->
+    <section class="bg-white/90 rounded-lg p-4 shadow">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-bold text-slate-800">Registro diario</h2>
+        <div class="text-sm text-slate-600">Entradas guardadas: <span id="logCount">0</span></div>
+      </div>
+      <div class="overflow-x-auto">
+        <table id="logTable" class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left">
+              <th class="px-3 py-2">Fecha</th>
+              <th class="px-3 py-2">Mesa</th>
+              <th class="px-3 py-2">Tipo</th>
+              <th class="px-3 py-2">Operador</th>
+              <th class="px-3 py-2">Proyecto</th>
+              <th class="px-3 py-2">Herramientas</th>
+              <th class="px-3 py-2">Inicio</th>
+              <th class="px-3 py-2">Fin</th>
+              <th class="px-3 py-2">Duración</th>
+            </tr>
+          </thead>
+          <tbody id="logTbody" class="bg-white/90"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="mt-6 text-white/60 text-sm">© Sistema Control de Taller • Versión local</footer>
+  </div>
+
+  <!-- Modal: Registrar / Editar actividad -->
+  <div id="modal" class="fixed inset-0 hidden items-center justify-center z-50 modal-bg">
+    <div class="bg-white rounded-lg w-full max-w-xl p-6 mx-4">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modalTitle" class="text-lg font-bold">Registrar actividad</h3>
+        <button id="closeModal" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="text-sm font-medium">Mesa</label>
+          <input id="modalMesa" class="w-full px-3 py-2 border rounded-md" readonly>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-sm font-medium">Tipo</label>
+            <input id="modalTipo" class="w-full px-3 py-2 border rounded-md" readonly>
+          </div>
+          <div>
+            <label class="text-sm font-medium">Operador</label>
+            <input id="modalOperador" class="w-full px-3 py-2 border rounded-md" placeholder="Nombre operador">
+          </div>
+          <div>
+            <label class="text-sm font-medium">Proyecto</label>
+            <input id="modalProyecto" class="w-full px-3 py-2 border rounded-md" placeholder="Nombre proyecto (opcional)">
+          </div>
+        </div>
+        <div>
+          <label class="text-sm font-medium">Herramientas (separadas por coma)</label>
+          <input id="modalHerramientas" class="w-full px-3 py-2 border rounded-md" placeholder="Taladro, Llaves, etc.">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm font-medium">Hora inicio</label>
+            <input id="modalInicio" type="datetime-local" class="w-full px-3 py-2 border rounded-md">
+          </div>
+          <div>
+            <label class="text-sm font-medium">Hora fin</label>
+            <input id="modalFin" type="datetime-local" class="w-full px-3 py-2 border rounded-md">
+          </div>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button id="saveActivity" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded">Guardar</button>
+          <button id="saveStartOnly" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Guardar solo inicio</button>
+          <button id="cancelModal" class="px-4 py-2 bg-slate-200 rounded">Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Mesas Grid -->
-  <section id="mesasGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-    <!-- Cards generated by JS -->
-  </section>
-
-  <!-- Registro Diario (Tabla) -->
-  <section class="bg-white/90 rounded-lg p-4 shadow">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="font-bold text-slate-800">Registro diario</h2>
-      <div class="text-sm text-slate-600">Entradas guardadas: <span id="logCount">0</span></div>
-    </div>
-
-    <div class="overflow-x-auto">
-      <table id="logTable" class="min-w-full text-sm">
-        <thead>
-          <tr class="text-left">
-            <th class="px-3 py-2">Fecha</th>
-            <th class="px-3 py-2">Mesa</th>
-            <th class="px-3 py-2">Tipo</th>
-            <th class="px-3 py-2">Operador</th>
-            <th class="px-3 py-2">Proyecto</th>
-            <th class="px-3 py-2">Herramientas</th>
-            <th class="px-3 py-2">Inicio</th>
-            <th class="px-3 py-2">Fin</th>
-            <th class="px-3 py-2">Duración</th>
-          </tr>
-        </thead>
-        <tbody id="logTbody" class="bg-white/90">
-          <!-- rows added by JS -->
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <footer class="mt-6 text-white/60 text-sm">© Sistema Control de Taller • Versión local</footer>
-</div>
-
-<!-- Modal -->
-<div id="modal" class="fixed inset-0 hidden items-center justify-center z-50 modal-bg">
-  <div class="bg-white rounded-lg w-full max-w-xl p-6 mx-4">
-    <div class="flex items-center justify-between mb-4">
-      <h3 id="modalTitle" class="text-lg font-bold">Registrar actividad</h3>
-      <button id="closeModal" class="text-slate-500 hover:text-slate-700"><i class="fa-solid fa-times"></i></button>
-    </div>
-
-    <div class="space-y-3">
-      <div>
-        <label class="text-sm font-medium">Mesa</label>
-        <input id="modalMesa" class="w-full px-3 py-2 border rounded-md" readonly>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+  <!-- Template mesa card -->
+  <template id="mesaTemplate">
+    <div class="card-bg rounded-xl p-5 table-card">
+      <div class="flex items-start justify-between mb-3">
         <div>
-          <label class="text-sm font-medium">Tipo</label>
-          <input id="modalTipo" class="w-full px-3 py-2 border rounded-md" readonly>
+          <div class="text-slate-600 text-sm" id="mesaTipoLabel"></div>
+          <h3 class="text-xl font-bold" id="mesaTitulo"></h3>
         </div>
-        <div>
-          <label class="text-sm font-medium">Operador</label>
-          <input id="modalOperador" class="w-full px-3 py-2 border rounded-md" placeholder="Nombre operador">
-        </div>
-        <div>
-          <label class="text-sm font-medium">Proyecto</label>
-          <input id="modalProyecto" class="w-full px-3 py-2 border rounded-md" placeholder="Nombre proyecto (opcional)">
+        <div class="text-right">
+          <div id="mesaStatus" class="text-sm font-semibold"></div>
+          <div class="text-xs text-slate-500" id="mesaSince"></div>
         </div>
       </div>
-
-      <div>
-        <label class="text-sm font-medium">Herramientas (separadas por coma)</label>
-        <input id="modalHerramientas" class="w-full px-3 py-2 border rounded-md" placeholder="Taladro, Llaves, etc.">
+      <div class="mb-3 text-sm text-slate-700" id="mesaDesc">Descripción</div>
+      <div class="mb-4">
+        <div class="text-xs text-slate-500 mb-2">Herramientas asignadas</div>
+        <div id="mesaTools" class="flex flex-wrap gap-2"></div>
       </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="text-sm font-medium">Hora inicio</label>
-          <input id="modalInicio" type="datetime-local" class="w-full px-3 py-2 border rounded-md">
-        </div>
-        <div>
-          <label class="text-sm font-medium">Hora fin</label>
-          <input id="modalFin" type="datetime-local" class="w-full px-3 py-2 border rounded-md">
-        </div>
-      </div>
-
-      <div class="flex gap-2 justify-end">
-        <button id="saveActivity" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded">Guardar</button>
-        <button id="saveStartOnly" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">Guardar solo inicio</button>
-        <button id="cancelModal" class="px-4 py-2 bg-slate-200 rounded">Cancelar</button>
+      <div class="flex gap-2 mt-auto">
+        <button class="startBtn flex-1 py-2 rounded-lg bg-emerald-500 text-white">Iniciar</button>
+        <button class="stopBtn flex-1 py-2 rounded-lg bg-red-500 text-white">Finalizar</button>
+        <button class="editBtn p-2 rounded-lg bg-slate-100 text-slate-700" title="Agregar / editar datos"><i class="fa-solid fa-pen"></i></button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Template -->
-<template id="mesaTemplate">
-  <div class="card-bg rounded-xl p-5 table-card">
-    <div class="flex items-start justify-between mb-3">
-      <div>
-        <div class="text-slate-600 text-sm" id="mesaTipoLabel"></div>
-        <h3 class="text-xl font-bold" id="mesaTitulo"></h3>
-      </div>
-      <div class="text-right">
-        <div id="mesaStatus" class="text-sm font-semibold"></div>
-        <div class="text-xs text-slate-500" id="mesaSince"></div>
-      </div>
-    </div>
-
-    <div class="mb-3 text-sm text-slate-700" id="mesaDesc">Descripción</div>
-
-    <div class="mb-4">
-      <div class="text-xs text-slate-500 mb-2">Herramientas asignadas</div>
-      <div id="mesaTools" class="flex flex-wrap gap-2"></div>
-    </div>
-
-    <div class="flex gap-2 mt-auto">
-      <button class="startBtn flex-1 py-2 rounded-lg bg-emerald-500 text-white">Iniciar</button>
-      <button class="stopBtn flex-1 py-2 rounded-lg bg-red-500 text-white">Finalizar</button>
-      <button class="editBtn p-2 rounded-lg bg-slate-100 text-slate-700" title="Agregar / editar datos"><i class="fa-solid fa-pen"></i></button>
-    </div>
-  </div>
-</template>
+  </template>
 
 <script>
 /***********************
@@ -198,23 +183,26 @@ const mesasInit = [
   { id: 'MT', nombre: 'Torno / Taladro', tipo: 'torno', desc: 'Área de torno o taladro' },
 ];
 
-const mesas = {};
-const registros = [];
+let mesas = {};           // estado actual de cada mesa
+let registros = [];       // registros diarios
 let selectedMesaForModal = null;
 
 /***********************
- * LocalStorage
+ * Persistencia con localStorage
  ***********************/
 function saveToLocal() {
-  localStorage.setItem('mesasState', JSON.stringify(mesas));
-  localStorage.setItem('registrosState', JSON.stringify(registros));
+  localStorage.setItem('mesas', JSON.stringify(mesas));
+  localStorage.setItem('registros', JSON.stringify(registros));
 }
 
 function loadFromLocal() {
-  const savedMesas = localStorage.getItem('mesasState');
-  const savedRegs = localStorage.getItem('registrosState');
-  if(savedMesas) Object.assign(mesas, JSON.parse(savedMesas));
-  if(savedRegs) registros.push(...JSON.parse(savedRegs));
+  mesas = JSON.parse(localStorage.getItem('mesas')) || {};
+  registros = JSON.parse(localStorage.getItem('registros')) || {};
+
+  // Inicializa mesas que falten
+  mesasInit.forEach(m=>{
+    if(!mesas[m.id]) mesas[m.id]={ocupada:false,inicio:null,operador:'',proyecto:'',herramientas:[]};
+  });
 }
 
 /***********************
@@ -222,70 +210,65 @@ function loadFromLocal() {
  ***********************/
 function nowISOShort() {
   const d = new Date();
-  const pad = n=> String(n).padStart(2,'0');
+  const pad = n=>String(n).padStart(2,'0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
 function formatDateTimeLocalToReadable(dtLocal) {
   if(!dtLocal) return '';
   const d = new Date(dtLocal);
   if(isNaN(d)) return dtLocal;
-  return d.toLocaleString('es-ES', { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  return d.toLocaleString('es-ES',{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
-
 function durationBetween(startISO, endISO) {
   if(!startISO) return '';
   const s = new Date(startISO);
   const e = endISO ? new Date(endISO) : new Date();
-  const diffMs = e - s;
-  if(diffMs <= 0) return '0m';
-  const mins = Math.floor(diffMs / 60000);
-  if(mins < 60) return mins + 'm';
+  const diffMs = e-s;
+  if(diffMs<=0) return '0m';
+  const mins = Math.floor(diffMs/60000);
+  if(mins<60) return mins+'m';
   const hrs = Math.floor(mins/60);
-  const rem = mins % 60;
+  const rem = mins%60;
   return `${hrs}h ${rem}m`;
 }
 
 /***********************
- * Renderizado de tarjetas
+ * Renderizado tarjetas
  ***********************/
 const grid = document.getElementById('mesasGrid');
 const template = document.getElementById('mesaTemplate');
 
-function renderMesas(filter = '', search = '') {
-  grid.innerHTML = '';
+function renderMesas(filter='', search='') {
+  grid.innerHTML='';
   const q = search.trim().toLowerCase();
-  mesasInit.forEach(m => {
-    if(filter && m.tipo !== filter) return;
-    if(q) {
-      const hay = [m.nombre, m.desc, m.tipo].join(' ').toLowerCase();
+  mesasInit.forEach(m=>{
+    if(filter && m.tipo!==filter) return;
+    if(q){
+      const hay = [m.nombre,m.desc,m.tipo].join(' ').toLowerCase();
       if(!hay.includes(q)) return;
     }
-
     const clone = template.content.cloneNode(true);
-    const card = clone.querySelector('.table-card');
     clone.querySelector('#mesaTitulo').textContent = m.nombre;
-    clone.querySelector('#mesaTipoLabel').textContent = m.tipo === 'corte' ? 'Corte' : (m.tipo === 'torno' ? 'Torno/Taladro' : 'Trabajo');
+    clone.querySelector('#mesaTipoLabel').textContent = m.tipo==='corte'?'Corte':(m.tipo==='torno'?'Torno/Taladro':'Trabajo');
     clone.querySelector('#mesaDesc').textContent = m.desc;
 
+    const state = mesas[m.id];
     const statusEl = clone.querySelector('#mesaStatus');
     const sinceEl = clone.querySelector('#mesaSince');
-
-    const state = mesas[m.id] || { ocupada: false, inicio: null, operador: '', proyecto: '', herramientas: [] };
-    if(state.ocupada) {
-      statusEl.innerHTML = `<span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span> Ocupada`;
-      sinceEl.textContent = 'Inicio: ' + formatDateTimeLocalToReadable(state.inicio);
+    if(state.ocupada){
+      statusEl.innerHTML='<span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span> Ocupada';
+      sinceEl.textContent='Inicio: '+formatDateTimeLocalToReadable(state.inicio);
     } else {
-      statusEl.innerHTML = `<span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2"></span> Disponible`;
-      sinceEl.textContent = '';
+      statusEl.innerHTML='<span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2"></span> Disponible';
+      sinceEl.textContent='';
     }
 
     const toolsContainer = clone.querySelector('#mesaTools');
-    toolsContainer.innerHTML = '';
-    (state.herramientas || []).forEach(t => {
-      const pill = document.createElement('div');
-      pill.className = 'px-2 py-1 bg-white/70 rounded text-xs border';
-      pill.textContent = t;
+    toolsContainer.innerHTML='';
+    (state.herramientas||[]).forEach(t=>{
+      const pill=document.createElement('div');
+      pill.className='px-2 py-1 bg-white/70 rounded text-xs border';
+      pill.textContent=t;
       toolsContainer.appendChild(pill);
     });
 
@@ -293,39 +276,16 @@ function renderMesas(filter = '', search = '') {
     const stopBtn = clone.querySelector('.stopBtn');
     const editBtn = clone.querySelector('.editBtn');
 
-    startBtn.addEventListener('click', ()=> handleStart(m.id));
-    stopBtn.addEventListener('click', ()=> handleStop(m.id));
-    editBtn.addEventListener('click', ()=> openModalForMesa(m.id));
+    startBtn.addEventListener('click',()=>openModalPrefillStart(m.id));
+    stopBtn.addEventListener('click',()=>openModalPrefillStop(m.id));
+    editBtn.addEventListener('click',()=>openModalForMesa(m.id));
 
     grid.appendChild(clone);
   });
 }
 
 /***********************
- * Acciones Start / Stop
- ***********************/
-function handleStart(mesaId) {
-  const m = mesas[mesaId] || {};
-  if(m.ocupada) {
-    alert('La mesa ya está ocupada. Si deseas actualizar el inicio o crear un nuevo registro usa "Editar".');
-    return;
-  }
-  selectedMesaForModal = mesaId;
-  openModalPrefillStart(mesaId);
-}
-
-function handleStop(mesaId) {
-  const m = mesas[mesaId];
-  if(!m || !m.ocupada) {
-    alert('La mesa no está en un trabajo activo.');
-    return;
-  }
-  selectedMesaForModal = mesaId;
-  openModalPrefillStop(mesaId);
-}
-
-/***********************
- * Modal operations
+ * Modal
  ***********************/
 const modal = document.getElementById('modal');
 const modalTitle = document.getElementById('modalTitle');
@@ -337,183 +297,169 @@ const modalHerramientas = document.getElementById('modalHerramientas');
 const modalInicio = document.getElementById('modalInicio');
 const modalFin = document.getElementById('modalFin');
 
-function openModalForMesa(mesaId) {
-  selectedMesaForModal = mesaId;
-  const info = mesasInit.find(x=>x.id===mesaId);
-  const state = mesas[mesaId] || { ocupada: false, inicio: null, operador: '', proyecto: '', herramientas: [] };
-  modalTitle.textContent = `Editar / Registrar - ${info.nombre}`;
+function showModal(){ modal.classList.remove('hidden'); modal.classList.add('flex'); }
+function hideModal(){ modal.classList.add('hidden'); modal.classList.remove('flex'); selectedMesaForModal=null; }
+
+document.getElementById('closeModal').addEventListener('click', hideModal);
+document.getElementById('cancelModal').addEventListener('click', hideModal);
+
+function openModalForMesa(mId){
+  selectedMesaForModal = mId;
+  const info = mesasInit.find(x=>x.id===mId);
+  const state = mesas[mId];
+  modalTitle.textContent=`Editar / Registrar - ${info.nombre}`;
   modalMesa.value = info.nombre;
   modalTipo.value = info.tipo;
-  modalOperador.value = state.operador || '';
-  modalProyecto.value = state.proyecto || '';
-  modalHerramientas.value = (state.herramientas || []).join(', ');
+  modalOperador.value = state.operador||'';
+  modalProyecto.value = state.proyecto||'';
+  modalHerramientas.value = (state.herramientas||[]).join(', ');
   modalInicio.value = state.inicio ? (new Date(state.inicio)).toISOString().slice(0,16) : '';
   modalFin.value = '';
   showModal();
 }
 
-function openModalPrefillStart(mesaId) {
-  selectedMesaForModal = mesaId;
-  const info = mesasInit.find(x=>x.id===mesaId);
+function openModalPrefillStart(mId){
+  selectedMesaForModal = mId;
+  const info = mesasInit.find(x=>x.id===mId);
   const now = nowISOShort();
-  modalTitle.textContent = `Iniciar trabajo - ${info.nombre}`;
+  modalTitle.textContent=`Iniciar trabajo - ${info.nombre}`;
   modalMesa.value = info.nombre;
   modalTipo.value = info.tipo;
+  modalInicio.value = now;
   modalOperador.value = '';
   modalProyecto.value = '';
   modalHerramientas.value = '';
-  modalInicio.value = now;
   modalFin.value = '';
   showModal();
 }
 
-function openModalPrefillStop(mesaId) {
-  selectedMesaForModal = mesaId;
-  const state = mesas[mesaId];
-  if(!state) return;
-  const info = mesasInit.find(x=>x.id===mesaId);
-  modalTitle.textContent = `Finalizar trabajo - ${info.nombre}`;
+function openModalPrefillStop(mId){
+  const state = mesas[mId];
+  if(!state.ocupada){
+    alert('La mesa no está ocupada.');
+    return;
+  }
+  selectedMesaForModal = mId;
+  const info = mesasInit.find(x=>x.id===mId);
+  modalTitle.textContent=`Finalizar trabajo - ${info.nombre}`;
   modalMesa.value = info.nombre;
   modalTipo.value = info.tipo;
-  modalOperador.value = state.operador || '';
-  modalProyecto.value = state.proyecto || '';
-  modalHerramientas.value = (state.herramientas || []).join(', ');
   modalInicio.value = state.inicio ? (new Date(state.inicio)).toISOString().slice(0,16) : '';
   modalFin.value = nowISOShort();
+  modalOperador.value = state.operador||'';
+  modalProyecto.value = state.proyecto||'';
+  modalHerramientas.value = (state.herramientas||[]).join(', ');
   showModal();
 }
 
-function showModal() { modal.classList.remove('hidden'); }
-function closeModal() { modal.classList.add('hidden'); selectedMesaForModal=null; }
-
-document.getElementById('closeModal').addEventListener('click', closeModal);
-document.getElementById('cancelModal').addEventListener('click', closeModal);
-
 /***********************
- * Guardado desde modal
+ * Guardar actividad desde modal
  ***********************/
-document.getElementById('saveActivity').addEventListener('click', ()=>{
+document.getElementById('saveActivity').addEventListener('click',()=>{
   if(!selectedMesaForModal) return;
   const mId = selectedMesaForModal;
-  const operador = modalOperador.value.trim();
-  const proyecto = modalProyecto.value.trim();
-  const herramientas = modalHerramientas.value.split(',').map(x=>x.trim()).filter(x=>x);
-  const inicio = modalInicio.value;
-  const fin = modalFin.value;
+  const state = mesas[mId];
+  state.ocupada = true;
+  state.operador = modalOperador.value;
+  state.proyecto = modalProyecto.value;
+  state.herramientas = modalHerramientas.value.split(',').map(s=>s.trim()).filter(s=>s);
+  state.inicio = modalInicio.value || nowISOShort();
+  const fin = modalFin.value || null;
 
-  // Actualiza estado de mesa
-  mesas[mId] = {
-    ocupada: !fin,
-    operador, proyecto, herramientas,
-    inicio
-  };
-
-  // Si hay hora fin, crea registro
   if(fin) {
-    registros.push({
-      fecha: new Date().toISOString(),
-      mesa: mId,
+    const reg = {
+      fecha: new Date().toLocaleDateString(),
+      mesa: mesasInit.find(x=>x.id===mId).nombre,
       tipo: mesasInit.find(x=>x.id===mId).tipo,
-      operador, proyecto, herramientas,
-      inicio, fin
-    });
-    // marca mesa como disponible
-    mesas[mId].ocupada = false;
-    mesas[mId].inicio = null;
+      operador: state.operador,
+      proyecto: state.proyecto,
+      herramientas: state.herramientas.join(', '),
+      inicio: state.inicio,
+      fin: fin,
+      duracion: durationBetween(state.inicio, fin)
+    };
+    registros.push(reg);
+    state.ocupada=false;
+    state.inicio=null;
   }
 
   saveToLocal();
-  renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value);
-  updateLogTable();
-  closeModal();
+  renderMesas();
+  renderLog();
+  hideModal();
 });
 
-document.getElementById('saveStartOnly').addEventListener('click', ()=>{
+document.getElementById('saveStartOnly').addEventListener('click',()=>{
   if(!selectedMesaForModal) return;
   const mId = selectedMesaForModal;
-  const operador = modalOperador.value.trim();
-  const proyecto = modalProyecto.value.trim();
-  const herramientas = modalHerramientas.value.split(',').map(x=>x.trim()).filter(x=>x);
-  const inicio = modalInicio.value;
-
-  mesas[mId] = { ocupada: true, operador, proyecto, herramientas, inicio };
-
+  const state = mesas[mId];
+  state.ocupada = true;
+  state.operador = modalOperador.value;
+  state.proyecto = modalProyecto.value;
+  state.herramientas = modalHerramientas.value.split(',').map(s=>s.trim()).filter(s=>s);
+  state.inicio = modalInicio.value || nowISOShort();
   saveToLocal();
-  renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value);
-  updateLogTable();
-  closeModal();
+  renderMesas();
+  hideModal();
 });
 
 /***********************
- * Tabla de registros
+ * Registro diario
  ***********************/
-function updateLogTable() {
-  const tbody = document.getElementById('logTbody');
-  tbody.innerHTML = '';
+const logTbody = document.getElementById('logTbody');
+function renderLog(){
+  logTbody.innerHTML='';
   registros.forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="px-3 py-1">${formatDateTimeLocalToReadable(r.fecha)}</td>
-      <td class="px-3 py-1">${r.mesa}</td>
-      <td class="px-3 py-1">${r.tipo}</td>
-      <td class="px-3 py-1">${r.operador}</td>
-      <td class="px-3 py-1">${r.proyecto}</td>
-      <td class="px-3 py-1">${r.herramientas.join(', ')}</td>
-      <td class="px-3 py-1">${formatDateTimeLocalToReadable(r.inicio)}</td>
-      <td class="px-3 py-1">${formatDateTimeLocalToReadable(r.fin)}</td>
-      <td class="px-3 py-1">${durationBetween(r.inicio, r.fin)}</td>
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td class="px-2 py-1">${r.fecha}</td>
+      <td class="px-2 py-1">${r.mesa}</td>
+      <td class="px-2 py-1">${r.tipo}</td>
+      <td class="px-2 py-1">${r.operador}</td>
+      <td class="px-2 py-1">${r.proyecto}</td>
+      <td class="px-2 py-1">${r.herramientas}</td>
+      <td class="px-2 py-1">${formatDateTimeLocalToReadable(r.inicio)}</td>
+      <td class="px-2 py-1">${formatDateTimeLocalToReadable(r.fin)}</td>
+      <td class="px-2 py-1">${r.duracion}</td>
     `;
-    tbody.appendChild(tr);
+    logTbody.appendChild(tr);
   });
   document.getElementById('logCount').textContent = registros.length;
 }
 
 /***********************
- * Excel export
+ * Filtros y búsqueda
  ***********************/
-document.getElementById('downloadExcelBtn').addEventListener('click', ()=>{
-  const ws = XLSX.utils.json_to_sheet(registros.map(r=>({
-    Fecha: formatDateTimeLocalToReadable(r.fecha),
-    Mesa: r.mesa,
-    Tipo: r.tipo,
-    Operador: r.operador,
-    Proyecto: r.proyecto,
-    Herramientas: r.herramientas.join(', '),
-    Inicio: formatDateTimeLocalToReadable(r.inicio),
-    Fin: formatDateTimeLocalToReadable(r.fin),
-    Duración: durationBetween(r.inicio, r.fin)
-  })));
+document.getElementById('search').addEventListener('input',()=>renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value));
+document.getElementById('filter-type').addEventListener('change',()=>renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value));
+
+/***********************
+ * Descargar Excel
+ ***********************/
+document.getElementById('downloadExcelBtn').addEventListener('click',()=>{
+  if(registros.length===0){ alert('No hay registros para exportar'); return; }
+  const ws = XLSX.utils.json_to_sheet(registros);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Registros");
-  XLSX.writeFile(wb, `Registros_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, ws, 'Registro');
+  XLSX.writeFile(wb, 'registro_taller.xlsx');
 });
 
 /***********************
  * Limpiar registros
  ***********************/
-document.getElementById('clearLogBtn').addEventListener('click', ()=>{
-  if(confirm('¿Deseas eliminar todos los registros del día? Esta acción no se puede deshacer.')) {
-    registros.length = 0;
+document.getElementById('clearLogBtn').addEventListener('click',()=>{
+  if(confirm('¿Seguro que quieres limpiar todos los registros del día?')){
+    registros=[];
     saveToLocal();
-    updateLogTable();
-    renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value);
+    renderLog();
   }
 });
 
 /***********************
- * Busqueda / filtros
+ * Clock
  ***********************/
-document.getElementById('filter-type').addEventListener('change', ()=> renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value));
-document.getElementById('search').addEventListener('input', ()=> renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value));
-
-/***********************
- * Reloj en tiempo real
- ***********************/
-function updateClock() {
-  const now = new Date();
-  document.getElementById('current-time').textContent = now.toLocaleString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-setInterval(updateClock, 1000);
+function updateClock(){ document.getElementById('current-time').textContent = new Date().toLocaleString(); }
+setInterval(updateClock,1000);
 updateClock();
 
 /***********************
@@ -521,13 +467,7 @@ updateClock();
  ***********************/
 loadFromLocal();
 renderMesas();
-updateLogTable();
-
-// Autosave cada minuto como seguridad extra
-setInterval(saveToLocal, 60000);
+renderLog();
 </script>
-
 </body>
 </html>
-
-
