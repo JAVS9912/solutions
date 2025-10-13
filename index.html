@@ -164,4 +164,331 @@
       </div>
     </div>
 
-    <div class="mb-3 text-sm text-slate
+    <div class="mb-3 text-sm text-slate-700" id="mesaDesc">Descripción</div>
+
+    <div class="mb-4">
+      <div class="text-xs text-slate-500 mb-2">Herramientas asignadas</div>
+      <div id="mesaTools" class="flex flex-wrap gap-2"></div>
+    </div>
+
+    <div class="flex gap-2 mt-auto">
+      <button class="startBtn flex-1 py-2 rounded-lg bg-emerald-500 text-white">Iniciar</button>
+      <button class="stopBtn flex-1 py-2 rounded-lg bg-red-500 text-white">Finalizar</button>
+      <button class="editBtn p-2 rounded-lg bg-slate-100 text-slate-700" title="Agregar / editar datos"><i class="fa-solid fa-pen"></i></button>
+    </div>
+  </div>
+</template>
+
+<script>
+/***********************
+ * DATOS INICIALES
+ ***********************/
+const mesasInit = [
+  { id: 'M1', nombre: 'Mesa 1', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'M2', nombre: 'Mesa 2', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'M3', nombre: 'Mesa 3', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'M4', nombre: 'Mesa 4', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'M5', nombre: 'Mesa 5', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'M6', nombre: 'Mesa 6', tipo: 'trabajo', desc: 'Mesa de trabajo general' },
+  { id: 'MC', nombre: 'Mesa Corte', tipo: 'corte', desc: 'Mesa para cortes y sierra' },
+  { id: 'MT', nombre: 'Torno / Taladro', tipo: 'torno', desc: 'Área de torno o taladro' },
+];
+
+const mesas = {};
+let registros = [];
+let selectedMesaForModal = null;
+
+/***********************
+ * LOCALSTORAGE
+ ***********************/
+function saveToLocal() {
+  localStorage.setItem('mesas', JSON.stringify(mesas));
+  localStorage.setItem('registros', JSON.stringify(registros));
+}
+
+function loadFromLocal() {
+  const m = localStorage.getItem('mesas');
+  const r = localStorage.getItem('registros');
+  if(m) Object.assign(mesas, JSON.parse(m));
+  if(r) registros = JSON.parse(r);
+}
+
+/***********************
+ * UTILIDADES TIEMPO
+ ***********************/
+function nowISOShort() {
+  const d = new Date();
+  const pad = (n)=> String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatDateTimeLocalToReadable(dtLocal) {
+  if(!dtLocal) return '';
+  const d = new Date(dtLocal);
+  if(isNaN(d)) return dtLocal;
+  return d.toLocaleString('es-ES', { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function durationBetween(startISO, endISO) {
+  if(!startISO) return '';
+  const s = new Date(startISO);
+  const e = endISO ? new Date(endISO) : new Date();
+  const diffMs = e - s;
+  if(diffMs <= 0) return '0m';
+  const mins = Math.floor(diffMs / 60000);
+  if(mins < 60) return mins + 'm';
+  const hrs = Math.floor(mins/60);
+  const rem = mins % 60;
+  return `${hrs}h ${rem}m`;
+}
+
+/***********************
+ * RENDER MESAS
+ ***********************/
+const grid = document.getElementById('mesasGrid');
+const template = document.getElementById('mesaTemplate');
+
+function renderMesas(filter = '', search = '') {
+  grid.innerHTML = '';
+  const q = search.trim().toLowerCase();
+  mesasInit.forEach(m => {
+    if(filter && m.tipo !== filter) return;
+    if(q) {
+      const hay = [m.nombre, m.desc, m.tipo].join(' ').toLowerCase();
+      if(!hay.includes(q)) return;
+    }
+    const clone = template.content.cloneNode(true);
+    const card = clone.querySelector('.table-card');
+    clone.querySelector('#mesaTitulo').textContent = m.nombre;
+    clone.querySelector('#mesaTipoLabel').textContent = m.tipo==='corte'?'Corte':(m.tipo==='torno'?'Torno/Taladro':'Trabajo');
+    clone.querySelector('#mesaDesc').textContent = m.desc;
+
+    const statusEl = clone.querySelector('#mesaStatus');
+    const sinceEl = clone.querySelector('#mesaSince');
+    const state = mesas[m.id] || { ocupada:false, inicio:null, operador:'', proyecto:'', herramientas:[] };
+    if(state.ocupada){
+      statusEl.innerHTML=`<span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span> Ocupada`;
+      sinceEl.textContent='Inicio: '+formatDateTimeLocalToReadable(state.inicio);
+    }else{
+      statusEl.innerHTML=`<span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2"></span> Disponible`;
+      sinceEl.textContent='';
+    }
+
+    const toolsContainer = clone.querySelector('#mesaTools');
+    toolsContainer.innerHTML='';
+    (state.herramientas||[]).forEach(t=>{
+      const pill=document.createElement('div');
+      pill.className='px-2 py-1 bg-white/70 rounded text-xs border';
+      pill.textContent=t;
+      toolsContainer.appendChild(pill);
+    });
+
+    clone.querySelector('.startBtn').addEventListener('click',()=>handleStart(m.id));
+    clone.querySelector('.stopBtn').addEventListener('click',()=>handleStop(m.id));
+    clone.querySelector('.editBtn').addEventListener('click',()=>openModalForMesa(m.id));
+
+    grid.appendChild(clone);
+  });
+}
+
+/***********************
+ * START / STOP
+ ***********************/
+function handleStart(mesaId){
+  const m=mesas[mesaId]||{};
+  if(m.ocupada){alert('La mesa ya está ocupada. Usa "Editar" para modificar.'); return;}
+  selectedMesaForModal=mesaId;
+  openModalPrefillStart(mesaId);
+}
+function handleStop(mesaId){
+  const m=mesas[mesaId];
+  if(!m||!m.ocupada){alert('No hay inicio registrado para esta mesa.'); return;}
+  selectedMesaForModal=mesaId;
+  openModalPrefillStop(mesaId);
+}
+
+/***********************
+ * MODAL OPERATIONS
+ ***********************/
+const modal=document.getElementById('modal');
+const modalTitle=document.getElementById('modalTitle');
+const modalMesa=document.getElementById('modalMesa');
+const modalTipo=document.getElementById('modalTipo');
+const modalOperador=document.getElementById('modalOperador');
+const modalProyecto=document.getElementById('modalProyecto');
+const modalHerramientas=document.getElementById('modalHerramientas');
+const modalInicio=document.getElementById('modalInicio');
+const modalFin=document.getElementById('modalFin');
+
+function showModal(){modal.classList.remove('hidden'); modal.classList.add('flex');}
+function hideModal(){modal.classList.remove('flex'); modal.classList.add('hidden'); selectedMesaForModal=null;}
+
+document.getElementById('closeModal').addEventListener('click', hideModal);
+document.getElementById('cancelModal').addEventListener('click', hideModal);
+modal.addEventListener('click',(e)=>{if(e.target===modal) hideModal();});
+Array.from(modal.querySelectorAll('input')).forEach(inp=>{inp.addEventListener('keydown',ev=>{if(ev.key==='Enter') ev.preventDefault();});});
+
+function openModalForMesa(mesaId){
+  selectedMesaForModal=mesaId;
+  const info=mesasInit.find(x=>x.id===mesaId);
+  const state=mesas[mesaId]||{ocupada:false,inicio:null,operador:'',proyecto:'',herramientas:[]};
+  modalTitle.textContent=`Editar / Registrar - ${info.nombre}`;
+  modalMesa.value=info.nombre;
+  modalTipo.value=info.tipo;
+  modalOperador.value=state.operador||'';
+  modalProyecto.value=state.proyecto||'';
+  modalHerramientas.value=(state.herramientas||[]).join(', ');
+  modalInicio.value=state.inicio?(new Date(state.inicio)).toISOString().slice(0,16):'';
+  modalFin.value='';
+  showModal();
+}
+
+function openModalPrefillStart(mesaId){
+  selectedMesaForModal=mesaId;
+  const info=mesasInit.find(x=>x.id===mesaId);
+  const now=nowISOShort();
+  modalTitle.textContent=`Iniciar trabajo - ${info.nombre}`;
+  modalMesa.value=info.nombre;
+  modalTipo.value=info.tipo;
+  modalOperador.value='';
+  modalProyecto.value='';
+  modalHerramientas.value='';
+  modalInicio.value=now;
+  modalFin.value='';
+  showModal();
+}
+
+function openModalPrefillStop(mesaId){
+  selectedMesaForModal=mesaId;
+  const info=mesasInit.find(x=>x.id===mesaId);
+  const state=mesas[mesaId];
+  if(!state||!state.inicio){alert('No hay inicio registrado para esta mesa.'); return;}
+  modalTitle.textContent=`Finalizar trabajo - ${info.nombre}`;
+  modalMesa.value=info.nombre;
+  modalTipo.value=info.tipo;
+  modalOperador.value=state.operador||'';
+  modalProyecto.value=state.proyecto||'';
+  modalHerramientas.value=(state.herramientas||[]).join(', ');
+  modalInicio.value=(new Date(state.inicio)).toISOString().slice(0,16);
+  modalFin.value=nowISOShort();
+  showModal();
+}
+
+/***********************
+ * GUARDAR ACTIVIDAD
+ ***********************/
+document.getElementById('saveActivity').addEventListener('click', ()=>{
+  const mesaId=selectedMesaForModal;
+  if(!mesaId) return hideModal();
+  const operador=modalOperador.value.trim();
+  const proyecto=modalProyecto.value.trim();
+  const herramientas=modalHerramientas.value.split(',').map(s=>s.trim()).filter(Boolean);
+  const inicioVal=modalInicio.value;
+  const finVal=modalFin.value;
+  if(!inicioVal){alert('Debes indicar hora de inicio'); return;}
+
+  const registro={
+    fecha:(new Date()).toLocaleDateString('es-ES'),
+    mesaId,
+    mesaNombre:mesasInit.find(x=>x.id===mesaId).nombre,
+    tipo:modalTipo.value,
+    operador:operador||'—',
+    proyecto:proyecto||'—',
+    herramientas:herramientas.join(', '),
+    inicio:inicioVal,
+    fin:finVal||'',
+    duracion:durationBetween(inicioVal, finVal)
+  };
+  registros.push(registro);
+
+  mesas[mesaId]={ocupada:!finVal, inicio:inicioVal, operador, proyecto, herramientas};
+
+  saveToLocal();
+  hideModal();
+  renderMesas();
+  renderLog();
+});
+
+document.getElementById('saveStartOnly').addEventListener('click', ()=>{
+  modalFin.value='';
+  document.getElementById('saveActivity').click();
+});
+
+/***********************
+ * RENDER LOG
+ ***********************/
+const logTbody=document.getElementById('logTbody');
+const logCount=document.getElementById('logCount');
+
+function renderLog(){
+  logTbody.innerHTML='';
+  registros.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.className='border-b';
+    ['fecha','mesaNombre','tipo','operador','proyecto','herramientas','inicio','fin','duracion'].forEach(k=>{
+      const td=document.createElement('td');
+      td.className='px-3 py-2';
+      td.contentEditable=(k==='operador'||k==='proyecto'||k==='herramientas'||k==='inicio'||k==='fin');
+      td.textContent=r[k];
+      td.addEventListener('input',()=>{
+        r[k]=td.textContent;
+        if(k==='inicio'||k==='fin') r.duracion=durationBetween(r.inicio,r.fin);
+        saveToLocal();
+        renderMesas();
+        renderLog();
+      });
+      tr.appendChild(td);
+    });
+    logTbody.appendChild(tr);
+  });
+  logCount.textContent=registros.length;
+}
+
+/***********************
+ * EVENTOS FILTRO / BUSQUEDA
+ ***********************/
+document.getElementById('search').addEventListener('input',e=>{
+  renderMesas(document.getElementById('filter-type').value, e.target.value);
+});
+document.getElementById('filter-type').addEventListener('change',e=>{
+  renderMesas(e.target.value, document.getElementById('search').value);
+});
+
+/***********************
+ * DESCARGAR EXCEL
+ ***********************/
+document.getElementById('downloadExcelBtn').addEventListener('click',()=>{
+  const ws=XLSX.utils.json_to_sheet(registros.map(r=>({
+    Fecha:r.fecha, Mesa:r.mesaNombre, Tipo:r.tipo, Operador:r.operador,
+    Proyecto:r.proyecto, Herramientas:r.herramientas, Inicio:r.inicio, Fin:r.fin, Duracion:r.duracion
+  })));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'RegistroDia');
+  XLSX.writeFile(wb, `Registro_Taller_${(new Date()).toISOString().slice(0,10)}.xlsx`);
+});
+
+/***********************
+ * LIMPIAR LOG
+ ***********************/
+document.getElementById('clearLogBtn').addEventListener('click',()=>{
+  if(confirm('¿Seguro quieres limpiar todos los registros del día?')){ registros=[]; saveToLocal(); renderLog(); renderMesas(); }
+});
+
+/***********************
+ * RELOJ
+ ***********************/
+function updateTime(){ document.getElementById('current-time').textContent = (new Date()).toLocaleTimeString('es-ES'); }
+setInterval(updateTime,1000);
+updateTime();
+
+/***********************
+ * INIT
+ ***********************/
+loadFromLocal();
+renderMesas();
+renderLog();
+</script>
+
+</body>
+</html>
+
