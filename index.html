@@ -161,6 +161,7 @@
       <div class="text-right">
         <div id="mesaStatus" class="text-sm font-semibold"></div>
         <div class="text-xs text-slate-500" id="mesaSince"></div>
+        <div class="text-sm text-emerald-700 mt-1" id="mesaLiveDur"></div>
       </div>
     </div>
 
@@ -234,12 +235,16 @@ function durationBetween(startISO, endISO) {
   const s = new Date(startISO);
   const e = endISO ? new Date(endISO) : new Date();
   const diffMs = e - s;
-  if(diffMs <= 0) return '0m';
-  const mins = Math.floor(diffMs / 60000);
-  if(mins < 60) return mins + 'm';
-  const hrs = Math.floor(mins/60);
-  const rem = mins % 60;
-  return `${hrs}h ${rem}m`;
+  if(diffMs <= 0) return '0s';
+  const secsTotal = Math.floor(diffMs / 1000);
+  const hrs = Math.floor(secsTotal / 3600);
+  const mins = Math.floor((secsTotal % 3600) / 60);
+  const secs = secsTotal % 60;
+  let out = '';
+  if(hrs>0) out += `${hrs}h `;
+  if(mins>0 || hrs>0) out += `${mins}m `;
+  out += `${secs}s`;
+  return out.trim();
 }
 
 /***********************
@@ -250,7 +255,7 @@ const template = document.getElementById('mesaTemplate');
 
 function renderMesas(filter = '', search = '') {
   grid.innerHTML = '';
-  const q = search.trim().toLowerCase();
+  const q = (search||'').trim().toLowerCase();
   mesasInit.forEach(m => {
     if(filter && m.tipo !== filter) return;
     if(q) {
@@ -258,20 +263,22 @@ function renderMesas(filter = '', search = '') {
       if(!hay.includes(q)) return;
     }
     const clone = template.content.cloneNode(true);
-    const card = clone.querySelector('.table-card');
     clone.querySelector('#mesaTitulo').textContent = m.nombre;
     clone.querySelector('#mesaTipoLabel').textContent = m.tipo==='corte'?'Corte':(m.tipo==='torno'?'Torno/Taladro':'Trabajo');
     clone.querySelector('#mesaDesc').textContent = m.desc;
 
     const statusEl = clone.querySelector('#mesaStatus');
     const sinceEl = clone.querySelector('#mesaSince');
+    const liveDurEl = clone.querySelector('#mesaLiveDur');
     const state = mesas[m.id] || { ocupada:false, inicio:null, operador:'', proyecto:'', herramientas:[] };
     if(state.ocupada){
       statusEl.innerHTML=`<span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span> Ocupada`;
       sinceEl.textContent='Inicio: '+formatDateTimeLocalToReadable(state.inicio);
+      liveDurEl.textContent = '⏱ ' + (state.inicio ? durationBetween(state.inicio, null) : '');
     }else{
       statusEl.innerHTML=`<span class="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2"></span> Disponible`;
       sinceEl.textContent='';
+      liveDurEl.textContent = '';
     }
 
     const toolsContainer = clone.querySelector('#mesaTools');
@@ -295,15 +302,15 @@ function renderMesas(filter = '', search = '') {
  * START / STOP
  ***********************/
 function handleStart(mesaId){
-  const m=mesas[mesaId]||{};
-  if(m.ocupada){alert('La mesa ya está ocupada. Usa "Editar" para modificar.'); return;}
-  selectedMesaForModal=mesaId;
+  const m = mesas[mesaId]||{};
+  if(m.ocupada){ alert('La mesa ya está ocupada. Usa "Editar" para modificar.'); return; }
+  selectedMesaForModal = mesaId;
   openModalPrefillStart(mesaId);
 }
 function handleStop(mesaId){
-  const m=mesas[mesaId];
-  if(!m||!m.ocupada){alert('No hay inicio registrado para esta mesa.'); return;}
-  selectedMesaForModal=mesaId;
+  const m = mesas[mesaId];
+  if(!m || !m.ocupada){ alert('No hay inicio registrado para esta mesa.'); return; }
+  selectedMesaForModal = mesaId;
   openModalPrefillStop(mesaId);
 }
 
@@ -320,88 +327,99 @@ const modalHerramientas=document.getElementById('modalHerramientas');
 const modalInicio=document.getElementById('modalInicio');
 const modalFin=document.getElementById('modalFin');
 
-function showModal(){modal.classList.remove('hidden'); modal.classList.add('flex');}
-function hideModal(){modal.classList.remove('flex'); modal.classList.add('hidden'); selectedMesaForModal=null;}
+function showModal(){ modal.classList.remove('hidden'); modal.classList.add('flex'); }
+function hideModal(){ modal.classList.remove('flex'); modal.classList.add('hidden'); selectedMesaForModal=null; }
 
 document.getElementById('closeModal').addEventListener('click', hideModal);
 document.getElementById('cancelModal').addEventListener('click', hideModal);
-modal.addEventListener('click',(e)=>{if(e.target===modal) hideModal();});
-Array.from(modal.querySelectorAll('input')).forEach(inp=>{inp.addEventListener('keydown',ev=>{if(ev.key==='Enter') ev.preventDefault();});});
+modal.addEventListener('click',(e)=>{ if(e.target===modal) hideModal(); });
+Array.from(modal.querySelectorAll('input')).forEach(inp=>{ inp.addEventListener('keydown',ev=>{ if(ev.key==='Enter') ev.preventDefault(); }); });
 
 function openModalForMesa(mesaId){
-  selectedMesaForModal=mesaId;
-  const info=mesasInit.find(x=>x.id===mesaId);
-  const state=mesas[mesaId]||{ocupada:false,inicio:null,operador:'',proyecto:'',herramientas:[]};
-  modalTitle.textContent=`Editar / Registrar - ${info.nombre}`;
-  modalMesa.value=info.nombre;
-  modalTipo.value=info.tipo;
-  modalOperador.value=state.operador||'';
-  modalProyecto.value=state.proyecto||'';
-  modalHerramientas.value=(state.herramientas||[]).join(', ');
-  modalInicio.value=state.inicio?(new Date(state.inicio)).toISOString().slice(0,16):'';
-  modalFin.value='';
+  selectedMesaForModal = mesaId;
+  const info = mesasInit.find(x=>x.id===mesaId);
+  const state = mesas[mesaId] || {ocupada:false,inicio:null,operador:'',proyecto:'',herramientas:[]};
+  modalTitle.textContent = `Editar / Registrar - ${info.nombre}`;
+  modalMesa.value = info.nombre;
+  modalTipo.value = info.tipo;
+  modalOperador.value = state.operador||'';
+  modalProyecto.value = state.proyecto||'';
+  modalHerramientas.value = (state.herramientas||[]).join(', ');
+  modalInicio.value = state.inicio ? (new Date(state.inicio)).toISOString().slice(0,16) : '';
+  modalFin.value = '';
   showModal();
 }
 
 function openModalPrefillStart(mesaId){
-  selectedMesaForModal=mesaId;
-  const info=mesasInit.find(x=>x.id===mesaId);
-  const now=nowISOShort();
-  modalTitle.textContent=`Iniciar trabajo - ${info.nombre}`;
-  modalMesa.value=info.nombre;
-  modalTipo.value=info.tipo;
-  modalOperador.value='';
-  modalProyecto.value='';
-  modalHerramientas.value='';
-  modalInicio.value=now;
-  modalFin.value='';
+  selectedMesaForModal = mesaId;
+  const info = mesasInit.find(x=>x.id===mesaId);
+  const now = nowISOShort();
+  modalTitle.textContent = `Iniciar trabajo - ${info.nombre}`;
+  modalMesa.value = info.nombre;
+  modalTipo.value = info.tipo;
+  modalOperador.value = '';
+  modalProyecto.value = '';
+  modalHerramientas.value = '';
+  modalInicio.value = now;
+  modalFin.value = '';
   showModal();
 }
 
 function openModalPrefillStop(mesaId){
-  selectedMesaForModal=mesaId;
-  const info=mesasInit.find(x=>x.id===mesaId);
-  const state=mesas[mesaId];
-  if(!state||!state.inicio){alert('No hay inicio registrado para esta mesa.'); return;}
-  modalTitle.textContent=`Finalizar trabajo - ${info.nombre}`;
-  modalMesa.value=info.nombre;
-  modalTipo.value=info.tipo;
-  modalOperador.value=state.operador||'';
-  modalProyecto.value=state.proyecto||'';
-  modalHerramientas.value=(state.herramientas||[]).join(', ');
-  modalInicio.value=(new Date(state.inicio)).toISOString().slice(0,16);
-  modalFin.value=nowISOShort();
+  selectedMesaForModal = mesaId;
+  const info = mesasInit.find(x=>x.id===mesaId);
+  const state = mesas[mesaId];
+  if(!state || !state.inicio){ alert('No hay inicio registrado para esta mesa.'); return; }
+  modalTitle.textContent = `Finalizar trabajo - ${info.nombre}`;
+  modalMesa.value = info.nombre;
+  modalTipo.value = info.tipo;
+  modalOperador.value = state.operador||'';
+  modalProyecto.value = state.proyecto||'';
+  modalHerramientas.value = (state.herramientas||[]).join(', ');
+  modalInicio.value = (new Date(state.inicio)).toISOString().slice(0,16);
+  modalFin.value = nowISOShort();
   showModal();
 }
 
 /***********************
  * GUARDAR ACTIVIDAD
+ *
+ * Nota: preserva tu lógica original:
+ * - Si se guarda con fin => se crea registro en 'registros'.
+ * - Si se guarda sin fin (guardar solo inicio) => no se agrega nuevo registro,
+ *   solo se actualiza 'mesas' (estado actual).
  ***********************/
 document.getElementById('saveActivity').addEventListener('click', ()=>{
-  const mesaId=selectedMesaForModal;
+  const mesaId = selectedMesaForModal;
   if(!mesaId) return hideModal();
-  const operador=modalOperador.value.trim();
-  const proyecto=modalProyecto.value.trim();
-  const herramientas=modalHerramientas.value.split(',').map(s=>s.trim()).filter(Boolean);
-  const inicioVal=modalInicio.value;
-  const finVal=modalFin.value;
-  if(!inicioVal){alert('Debes indicar hora de inicio'); return;}
+  const operador = modalOperador.value.trim();
+  const proyecto = modalProyecto.value.trim();
+  const herramientas = modalHerramientas.value.split(',').map(s=>s.trim()).filter(Boolean);
+  const inicioVal = modalInicio.value;
+  const finVal = modalFin.value;
+  if(!inicioVal){ alert('Debes indicar hora de inicio'); return; }
 
-  const registro={
-    fecha:(new Date()).toLocaleDateString('es-ES'),
-    mesaId,
-    mesaNombre:mesasInit.find(x=>x.id===mesaId).nombre,
-    tipo:modalTipo.value,
-    operador:operador||'—',
-    proyecto:proyecto||'—',
-    herramientas:herramientas.join(', '),
-    inicio:inicioVal,
-    fin:finVal||'',
-    duracion:durationBetween(inicioVal, finVal)
-  };
-  registros.push(registro);
-
-  mesas[mesaId]={ocupada:!finVal, inicio:inicioVal, operador, proyecto, herramientas};
+  // Si hay finVal (se terminó), creamos registro histórico
+  if(finVal){
+    const registro = {
+      fecha: (new Date()).toLocaleDateString('es-ES'),
+      mesaId,
+      mesaNombre: mesasInit.find(x=>x.id===mesaId).nombre,
+      tipo: modalTipo.value,
+      operador: operador||'—',
+      proyecto: proyecto||'—',
+      herramientas: herramientas.join(', '),
+      inicio: inicioVal,
+      fin: finVal,
+      duracion: durationBetween(inicioVal, finVal)
+    };
+    registros.push(registro);
+    // actualizar estado de la mesa: ahora no está ocupada
+    mesas[mesaId] = { ocupada: false, inicio: null, operador: '', proyecto: '', herramientas: [] };
+  } else {
+    // Sin fin: solo actualizar estado actual de la mesa (inicia o modifica)
+    mesas[mesaId] = { ocupada: true, inicio: inicioVal, operador, proyecto, herramientas };
+  }
 
   saveToLocal();
   hideModal();
@@ -410,7 +428,7 @@ document.getElementById('saveActivity').addEventListener('click', ()=>{
 });
 
 document.getElementById('saveStartOnly').addEventListener('click', ()=>{
-  modalFin.value='';
+  modalFin.value = '';
   document.getElementById('saveActivity').click();
 });
 
@@ -422,17 +440,25 @@ const logCount=document.getElementById('logCount');
 
 function renderLog(){
   logTbody.innerHTML='';
-  registros.forEach(r=>{
+  registros.forEach((r, idx)=>{
     const tr=document.createElement('tr');
     tr.className='border-b';
     ['fecha','mesaNombre','tipo','operador','proyecto','herramientas','inicio','fin','duracion'].forEach(k=>{
       const td=document.createElement('td');
       td.className='px-3 py-2';
       td.contentEditable=(k==='operador'||k==='proyecto'||k==='herramientas'||k==='inicio'||k==='fin');
-      td.textContent=r[k];
+      if(k==='duracion'){
+        td.textContent = durationBetween(r.inicio, r.fin);
+      } else {
+        td.textContent = r[k];
+      }
       td.addEventListener('input',()=>{
-        r[k]=td.textContent;
-        if(k==='inicio'||k==='fin') r.duracion=durationBetween(r.inicio,r.fin);
+        // cuando el usuario edita en la tabla actualizamos el registro
+        r[k] = td.textContent;
+        if(k==='inicio' || k==='fin') {
+          // recalcular duracion si cambian las horas
+          r.duracion = durationBetween(r.inicio, r.fin);
+        }
         saveToLocal();
         renderMesas();
         renderLog();
@@ -441,37 +467,79 @@ function renderLog(){
     });
     logTbody.appendChild(tr);
   });
-  logCount.textContent=registros.length;
+  logCount.textContent = registros.length;
 }
 
 /***********************
  * EVENTOS FILTRO / BUSQUEDA
  ***********************/
-document.getElementById('search').addEventListener('input',e=>{
+document.getElementById('search').addEventListener('input', e=>{
   renderMesas(document.getElementById('filter-type').value, e.target.value);
 });
-document.getElementById('filter-type').addEventListener('change',e=>{
+document.getElementById('filter-type').addEventListener('change', e=>{
   renderMesas(e.target.value, document.getElementById('search').value);
 });
 
 /***********************
- * DESCARGAR EXCEL
+ * DESCARGAR EXCEL (duración actualizada: usa hora actual para entradas en curso)
  ***********************/
 document.getElementById('downloadExcelBtn').addEventListener('click',()=>{
-  const ws=XLSX.utils.json_to_sheet(registros.map(r=>({
-    Fecha:r.fecha, Mesa:r.mesaNombre, Tipo:r.tipo, Operador:r.operador,
-    Proyecto:r.proyecto, Herramientas:r.herramientas, Inicio:r.inicio, Fin:r.fin, Duracion:r.duracion
-  })));
-  const wb=XLSX.utils.book_new();
+  // Construimos filas a partir del historial 'registros'
+  // También incluimos las mesas que actualmente estén ocupadas (en curso) como filas separadas si deseas.
+  // Aquí respetamos exactamente los registros históricos; y además añadimos las mesas en curso (opcional).
+  const filas = [];
+
+  // Registros finalizados (histórico)
+  registros.forEach(r=>{
+    filas.push({
+      Fecha: r.fecha,
+      Mesa: r.mesaNombre,
+      Tipo: r.tipo,
+      Operador: r.operador,
+      Proyecto: r.proyecto,
+      Herramientas: r.herramientas,
+      Inicio: r.inicio,
+      Fin: r.fin,
+      Duracion: durationBetween(r.inicio, r.fin)
+    });
+  });
+
+  // Incluir mesas que estén en curso (no finalizadas) con duración hasta ahora
+  Object.keys(mesas).forEach(mid=>{
+    const s = mesas[mid];
+    if(s && s.ocupada && s.inicio){
+      const info = mesasInit.find(x=>x.id===mid);
+      filas.push({
+        Fecha: (new Date()).toLocaleDateString('es-ES'),
+        Mesa: info ? info.nombre : mid,
+        Tipo: info ? info.tipo : '',
+        Operador: s.operador || '—',
+        Proyecto: s.proyecto || '—',
+        Herramientas: (s.herramientas||[]).join(', '),
+        Inicio: s.inicio,
+        Fin: '(en curso)',
+        Duracion: durationBetween(s.inicio, null)
+      });
+    }
+  });
+
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'RegistroDia');
-  XLSX.writeFile(wb, `Registro_Taller_${(new Date()).toISOString().slice(0,10)}.xlsx`);
+  const fechaArchivo = (new Date()).toISOString().slice(0,10);
+  XLSX.writeFile(wb, `Registro_Taller_${fechaArchivo}.xlsx`);
 });
 
 /***********************
  * LIMPIAR LOG
  ***********************/
 document.getElementById('clearLogBtn').addEventListener('click',()=>{
-  if(confirm('¿Seguro quieres limpiar todos los registros del día?')){ registros=[]; saveToLocal(); renderLog(); renderMesas(); }
+  if(confirm('¿Seguro quieres limpiar todos los registros del día?')){
+    registros = [];
+    saveToLocal();
+    renderLog();
+    renderMesas();
+  }
 });
 
 /***********************
@@ -480,6 +548,31 @@ document.getElementById('clearLogBtn').addEventListener('click',()=>{
 function updateTime(){ document.getElementById('current-time').textContent = (new Date()).toLocaleTimeString('es-ES'); }
 setInterval(updateTime,1000);
 updateTime();
+
+/***********************
+ * ACTUALIZAR DURACIÓN EN TIEMPO REAL
+ * - Actualiza live duration en mesas y recalcula duración en registros que estén en curso (si los hubiera)
+ ***********************/
+setInterval(()=>{
+  // actualizar duración en objetos 'mesas' para mostrar en tarjetas
+  Object.keys(mesas).forEach(mid=>{
+    const s = mesas[mid];
+    if(s && s.inicio && s.ocupada){
+      s.duracion = durationBetween(s.inicio, null);
+    }
+  });
+
+  // actualizar duracion temporal en registros que no tengan fin (poco probable si sigues creando registros solo con fin)
+  registros.forEach(r=>{
+    if(r.inicio && !r.fin){
+      r.duracion = durationBetween(r.inicio, null);
+    }
+  });
+
+  // refrescar UI
+  renderMesas(document.getElementById('filter-type').value, document.getElementById('search').value);
+  renderLog();
+},1000);
 
 /***********************
  * INIT
